@@ -15,7 +15,10 @@ export class WebhookService {
 
   async signPayload(partnerId: string, payload: string): Promise<string> {
     const partner = await this.partnerRepo.findOne({ where: { id: partnerId } });
-    const secret = partner?.webhookSecret ?? this.config.get<string>('partnerGateway.webhookSecret', '');
+    const secret = partner?.webhookSecret ?? this.config.get<string>('partnerGateway.webhookSecret');
+    if (!secret || secret.trim() === '') {
+      throw new Error(`Webhook secret not configured for partner ${partnerId}`);
+    }
     return crypto.createHmac('sha256', secret).update(payload).digest('hex');
   }
 
