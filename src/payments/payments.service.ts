@@ -85,9 +85,26 @@ export class PaymentsService {
       throw new Error('Processor not available');
     }
 
-    payment.status = PaymentStatus.PROCESSING;
-    payment.processorId = route.processorId;
-    await this.paymentRepo.save(payment);
+    // Atomic state transition to prevent race conditions
+    const updatedPayment = await this.paymentRepo.manager.transaction(async (manager) => {
+      const currentPayment = await manager.findOne(payment.constructor, {
+        where: {
+          id: payment.id,
+          status: PaymentStatus.PENDING
+        },
+        lock: { mode: 'pessimistic_write' }
+       });
+
+      if (!currentPayment) {
+        throw new Error('Payment state has changed or is no longer pending');
+      }
+
+      currentPayment.status = PaymentStatus.PROCESSING;
+      currentPayment.processorId = route.processorId;
+      return await manager.save(currentPayment);
+    });
+
+    payment = updatedPayment;
 
     const result = await processor.process({
       paymentId: payment.id,
@@ -101,10 +118,6 @@ export class PaymentsService {
 
     if (result.processorReference != null) payment.processorReference = result.processorReference;
     if (result.providerResponse != null) payment.providerResponse = result.providerResponse;
-    if (result.failureReason != null) payment.failureReason = result.failureReason;
-    payment.status =
-      result.status === 'COMPLETED'
-        ? PaymentStatus.COMPLETED
         : result.status === 'FAILED'
           ? PaymentStatus.FAILED
           : PaymentStatus.PROCESSING;
