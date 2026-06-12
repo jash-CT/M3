@@ -26,7 +26,12 @@ export class IdempotencyGuard implements CanActivate {
     const key =
       request.headers[IdempotencyKeyHeader.toLowerCase()] as string | undefined;
 
-    if (!key || key.length < 16) return true; // no key or too short: proceed
+    if (!key) {
+      throw new BadRequestException('Idempotency key is required');
+    }
+    if (key.length < 16) {
+      throw new BadRequestException('Idempotency key must be at least 16 characters');
+    }
 
     const cached = await this.idempotency.get(key);
     if (cached) {
