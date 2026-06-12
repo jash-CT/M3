@@ -18,7 +18,7 @@ import { IdempotencyKey } from './entities/idempotency-key.entity';
         database: config.get('database.database'),
         ssl: config.get('database.ssl'),
         autoLoadEntities: true,
-        synchronize: process.env.NODE_ENV === 'development', // use migrations in prod
+        synchronize: config.get('database.synchronize', false), // use migrations in prod
         logging: config.get('nodeEnv') === 'development',
       }),
       inject: [ConfigService],
