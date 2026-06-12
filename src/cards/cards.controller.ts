@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  UseGuards,
   Get,
   Param,
   Patch,
@@ -8,11 +9,13 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CardsService } from './cards.service';
+import { AuthGuard } from '@nestjs/passport';
 import { IssueCardDto, UpdateCardStatusDto } from './dto/card.dto';
 import { CardStatus } from './entities/card.entity';
 
 @ApiTags('Cards')
 @Controller('cards')
+@UseGuards(AuthGuard())
 export class CardsController {
   constructor(private readonly cards: CardsService) {}
 
