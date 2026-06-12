@@ -20,10 +20,18 @@ export class PartnerGatewayService {
   async validateApiKey(apiKey: string): Promise<Partner> {
     if (!apiKey) throw new UnauthorizedException('Missing API key');
     const partners = await this.partnerRepo.find({ where: { active: true } });
+    
+    // Constant-time validation: always check all partners, no early return
+    let matchedPartner: Partner | null = null;
     for (const partner of partners) {
       const match = await bcrypt.compare(apiKey, partner.apiKeyHash);
-      if (match) return partner;
+      // Use conditional assignment instead of early return
+      if (match && !matchedPartner) {
+        matchedPartner = partner;
+      }
     }
+
+    if (matchedPartner) return matchedPartner;
     throw new UnauthorizedException('Invalid API key');
   }
 
