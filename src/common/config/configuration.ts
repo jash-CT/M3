@@ -20,7 +20,13 @@ export default () => ({
   },
 
   jwt: {
-    secret: process.env.JWT_SECRET || 'change-in-production',
+    secret: (() => {
+      const jwtSecret = process.env.JWT_SECRET;
+      if (!jwtSecret) {
+        throw new Error('JWT_SECRET undefined. This is required for secure operation.');
+      }
+      return jwtSecret;
+    })(),
     expiresIn: process.env.JWT_EXPIRES_IN || '15m',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
@@ -29,7 +35,13 @@ export default () => ({
     ttlSeconds: parseInt(process.env.IDEMPOTENCY_TTL_SECONDS || '86400', 10), // 24h
   },
 
-  partnerGateway: {
+    webhookSecret: (() => {
+      const webhookSecret = process.env.PARTNER_WEBHOOK_SECRET;
+      if (!webhookSecret) {
+        throw new Error('PARTNER_WEBHOOK_SECRET undefined. This is required for secure operation.');
+      }
+      return webhookSecret;
+    })(),
     apiKeyHeader: process.env.PARTNER_API_KEY_HEADER || 'X-API-Key',
     webhookSecret: process.env.PARTNER_WEBHOOK_SECRET || '',
   },
