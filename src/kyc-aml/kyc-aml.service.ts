@@ -94,29 +94,47 @@ export class KycAmlService {
   ): Promise<KycVerification> {
     const verification = await this.verificationRepo.findOne({
       where: { id: verificationId },
+      lock: { mode: 'pessimistic_write' },
     });
     if (!verification) throw new NotFoundException('Verification not found');
-    verification.status = status;
-    verification.providerResponse = providerResponse ?? verification.providerResponse;
-    verification.providerReference = providerReference ?? verification.providerReference;
-    verification.completedAt = new Date();
-    await this.verificationRepo.save(verification);
 
-    const approvedCount = await this.verificationRepo.count({
-      where: { customerId: verification.customerId, status: VerificationStatus.APPROVED },
+    // Use a transaction to ensure atomicity of status updates
+    return await this.verificationRepo.manager.transaction(async (manager) => {
+      // Fetch the verification with pessimistic lock for update +      const lockedVerification = await manager.findOne(KycVerification, {
+        where: { id: verificationId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!lockedVerification) throw new NotFoundException('Verification not found');
+
+      // Update verification status
+      lockedVerification.status = status;
+      lockedVerification.providerResponse = providerResponse ?? lockedVerification.providerResponse;
+      lockedVerification.providerReference = providerReference ?? lockedVerification.providerReference;
+      lockedVerification.completedAt = new Date();
+      await manager.save(lockedVerification);
+
+      // Count approved verifications within the transaction
+      const approvedCount = await manager.count(KycVerification, {
+        where: { customerId: lockedVerification.customerId, status: VerificationStatus.APPROVED },
+      });
+
+      // Update customer tier based on approved count
+      if (approvedCount >= 2) {
+        await manager.update(Customer, lockedVerification.customerId, {
+          tier: KycTier.TIER_2,
+          status: 'APPROVED',
+          reviewedAt: new Date(),
+        });
+      } else if (approvedCount >= 1) {
+        await manager.update(Customer, lockedVerification.customerId, {
+          tier: KycTier.TIER_1,
+          status: 'APPROVED',
+          reviewedAt: new Date(),
+        });
+      }
+
+      return lockedVerification;
     });
-    if (approvedCount >= 2) {
-      await this.customerRepo.update(verification.customerId, {
-        tier: KycTier.TIER_2,
-        status: 'APPROVED',
-        reviewedAt: new Date(),
-      });
-    } else if (approvedCount >= 1) {
-      await this.customerRepo.update(verification.customerId, {
-        tier: KycTier.TIER_1,
-        status: 'APPROVED',
-        reviewedAt: new Date(),
-      });
     }
 
     await this.audit.log({
