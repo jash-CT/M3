@@ -1,21 +1,20 @@
 import {
   Body,
   Controller,
-  UseGuards,
   Get,
+   HttpException,
+  HttpStatus,
   Param,
   Patch,
   Post,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CardsService } from './cards.service';
-import { AuthGuard } from '@nestjs/passport';
 import { IssueCardDto, UpdateCardStatusDto } from './dto/card.dto';
 import { CardStatus } from './entities/card.entity';
 
 @ApiTags('Cards')
 @Controller('cards')
-@UseGuards(AuthGuard())
 export class CardsController {
   constructor(private readonly cards: CardsService) {}
 
@@ -43,7 +42,11 @@ export class CardsController {
 
   @Get(':id')
   async getById(@Param('id') id: string) {
-    return this.cards.getById(id);
+    const card = await this.cards.getById(id);
+    if (!card) {
+      throw new HttpException('Card not found', HttpStatus.NOT_FOUND);
+    }
+    return card;
   }
 
   @Get('customer/:customerId')
@@ -55,7 +58,11 @@ export class CardsController {
   async updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateCardStatusDto,
-  ) {
+    const card = await this.cards.getById(id);
+    if (!card) {
+      throw new HttpException('Card not found', HttpStatus.NOT_FOUND);
+    }
+    return this.cards.updateStatus(id, dto.status);
     return this.cards.updateStatus(id, dto.status);
   }
 }
